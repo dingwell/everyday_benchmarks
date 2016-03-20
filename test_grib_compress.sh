@@ -5,6 +5,13 @@ set -e
 
 FILES=$@
 
+# Settings:
+# (TODO: allow setting this from the CLI)
+DO_GZIP=true
+DO_BZIP=true
+DO_XZ=true
+DO_LZOP=true
+
 total_size_kB(){
   # Takes a list of files as argument
   du -B kB -c $@|tail -n1|sed 's/kB.*//'
@@ -32,16 +39,23 @@ get_suffix(){
   rm $NEWFILE
 }
 
-
 get_compr_ratio_gz(){
   # Takes a list of gzip-compressed files as argument:
   gzip -l $@ |tail -n1|egrep -o '[0-9]+.[0-9]%'
 }
 
+get_compr_ratio_lzo(){
+  # Takes a list of .lz files as argument
+  TMP=$(lzop -l $@ |tail -n1|egrep -o '[0-9]+.[0-9]%')
+  TMP=$(echo $TMP|sed 's/%//')  # Remove '%'
+  local RATIO=$(echo "scale=1; 100-$TMP"|bc)
+  echo "$RATIO%"
+}
+
 get_compr_ratio_bz2(){
   # Takes a list of bzip2-compressed files as argument
   local COMPR_SIZE=$(cat $@|wc -c)  # Size in bytes
-  local ORIG_SIZE=$(bzcat $@|wc -c)
+  local ORIG_SIZE=$(bzip2 -dc $@|wc -c)
   local RATIO=$(echo "scale=1;100-100*$COMPR_SIZE/$ORIG_SIZE"|bc)
   echo "$RATIO%"
 }
@@ -49,80 +63,119 @@ get_compr_ratio_bz2(){
 get_compr_ratio_xz(){
   # Takes a list of xz-compressed files as argument
   local COMPR_SIZE=$(cat $@|wc -c)  # Size in bytes
-  local ORIG_SIZE=$(xzcat $@|wc -c)
+  local ORIG_SIZE=$(xz -dc $@|wc -c)
   local RATIO=$(echo "scale=1;100-100*$COMPR_SIZE/$ORIG_SIZE"|bc)
   echo "$RATIO%"
 }
 
-
 test_compression(){
   # Takes compression tool as argument
   # $1    - compression command
-  # $2    - decompression command
+  # $2    - compression level (1-9)
   # Needs the following variables:
   # FILES         - list of files to compress
-  # KB_BEFORE     - decompressed size (no suffix)
-  CMD="$1"
-  UNCMD="$2"
 
-  #get_suffix $CMD
+  local CMD="$1"
+  local LVL="$2"
+
+  #get_suffix for $CMD
   SUFFIX=$(get_suffix "$CMD")  # Get compression suffix
-  
+
   # Ensure that no already compressed files exist:
   if ls *.$SUFFIX &> /dev/null; then
-    echo "Found some .$SUFFIX files in working directory!"
-    echo "Please remove before running test!"
+    echo "Found some .$SUFFIX files in working directory!" 1>&2
+    echo "Please remove before running test!" 1>&2
     exit 1
   fi
-
+  
   # Begin compression test:
-  echo "Testing '$CMD' (decomp.: $UNCMD; suffix: '.$SUFFIX')"
   T0=$SECONDS
-  $CMD $FILES
+  if [[ $CMD == "lzop" ]]; then 
+    $CMD -U -$LVL $FILES  # Run command (U=delete original files)
+  else  # Most tools will remove the uncompressed files by default
+    $CMD -$LVL $FILES # Run compress command 
+  fi
   T1=$SECONDS
-
-  DT=$(( T1-T0 ))
-  echo "Compression time = ${DT}s"
+  DT_COM=$(( T1-T0 ))
+  #echo "Compression time = ${DT}s"
   
   COMP_RATIO=$(get_compr_ratio_$SUFFIX *.$SUFFIX)
-  echo "Compression ratio = $COMP_RATIO"
+  #echo "Compression ratio = $COMP_RATIO"
 
   # Begin decompression test:
   T0=$SECONDS
-  $UNCMD *.$SUFFIX
+  if [[ $CMD == "lzop" ]]; then
+    $CMD -d -U *.$SUFFIX  # Run command (U=delete original files)
+  else  # Most tools will remove the uncompressed files by default
+    $CMD -d *.$SUFFIX  # Run decompress command
+  fi
   T1=$SECONDS
-  DT=$(( T1-T0 ))
-  echo "Decompression time = ${DT}s"
+  DT_DEC=$(( T1-T0 ))
+  #echo "Decompression time = ${DT}s"
+  echo "$COMP_RATIO ${DT_COM}s ${DT_DEC}s"
 }
 
+print_header(){
+  local HEADER='        & CMD        '
+  if $DO_GZIP; then
+    HEADER="$HEADER"'& gzip '
+  fi
+  if $DO_LZOP; then
+    HEADER="$HEADER"'& lzop '
+  fi
+  if $DO_BZIP; then
+    HEADER="$HEADER"'& bzip2 '
+  fi
+  if $DO_XZ; then
+    HEADER="$HEADER"'& xz '
+  fi
+  local NWORDS=$(echo $HEADER|wc -w)
+  local NCOLS=$(echo "$NWORDS/2-1"|bc)
+  echo '\hline'
+  echo '\tabular{ll*{'"$NCOLS"'}{c}}'
+  echo '\hline'
+}
 
 KB_BEFORE=$(total_size_kB $FILES)  # With unit
 
 echo "Total uncompressed size = $KB_BEFORE kB"
+echo "'RATIO' below is the amount of space _saved_"
 
-# Test compression:
-test_compression gzip gunzip
-test_compression bzip2 bunzip2
-test_compression xz unxz
-# TODO: format output as a table e.g.:
-# CMD           |  gzip |  lzo  | bzip2 |   xz  |
-# ----------------------------------------------+
-# LEV1: RATIO   | XX.X% | XX.X% | XX.X% | XX.X% |
-# LEV1: TIME [s]| XXX s | XXX s | XXX s | XXX s |
-# ----------------------------------------------+
-# LEV2: RATIO   |
-# LEV2: TIME [s]|
-# LEV3: RATIO   |
-# LEV3: TIME [s]|
-# LEV4: RATIO   |
-# LEV4: TIME [s]|
-# LEV5: RATIO   |
-# LEV5: TIME [s]|
-# LEV6: RATIO   |
-# LEV6: TIME [s]|
-# LEV7: RATIO   |
-# LEV7: TIME [s]|
-# LEV8: RATIO   |
-# LEV8: TIME [s]|
-# LEV9: RATIO   |
-# LEV9: TIME [s]|
+print_header
+# Perform tests:
+for lvl in $(seq 9); do
+  RATIOS=""
+  C_TIMES=""
+  U_TIMES=""
+  if $DO_GZIP; then
+    A="$(test_compression gzip $lvl)"
+    RATIOS="$RATIOS & $(echo $A|awk '{print $1}')"
+    C_TIMES="$C_TIMES & $(echo $A|awk '{print $2}')"
+    U_TIMES="$U_TIMES & $(echo $A|awk '{print $3}')"
+  fi
+  if $DO_LZOP; then
+    A="$(test_compression lzop $lvl)"
+    RATIOS="$RATIOS & $(echo $A|awk '{print $1}')"
+    C_TIMES="$C_TIMES & $(echo $A|awk '{print $2}')"
+    U_TIMES="$U_TIMES & $(echo $A|awk '{print $3}')"
+  fi
+  if $DO_BZIP; then
+    A="$(test_compression bzip2 $lvl)"
+    RATIOS="$RATIOS & $(echo $A|awk '{print $1}')"
+    C_TIMES="$C_TIMES & $(echo $A|awk '{print $2}')"
+    U_TIMES="$U_TIMES & $(echo $A|awk '{print $3}')"
+  fi
+  if $DO_XZ; then
+    A="$(test_compression xz $lvl)"
+    RATIOS="$RATIOS & $(echo $A|awk '{print $1}')"
+    C_TIMES="$C_TIMES & $(echo $A|awk '{print $2}')"
+    U_TIMES="$U_TIMES & $(echo $A|awk '{print $3}')"
+  fi
+  RATIOS="$RATIOS"'\\'
+  C_TIMES="$C_TIMES"'\\'
+  U_TIMES="$U_TIMES"'\\'
+  echo "        & RATIO      $RATIOS"
+  echo "LEV$lvl    & COMP. TIME $C_TIMES"
+  echo "        & DEC.  TIME $U_TIMES"
+  echo '\hline'
+done
