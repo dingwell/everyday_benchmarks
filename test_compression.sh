@@ -162,9 +162,9 @@ print_header(){
   fi
   local NWORDS=$(echo $HEADER|wc -w)
   local NCOLS=$(echo "$NWORDS/2-1"|bc)
-  echo "-------------------------------------------------------------"
+  echo "|------------------------------------------------------------|"
   echo "$HEADER"
-  echo "-------------------------------------------------------------"
+  echo "|------------------------------------------------------------|"
 }
 
 print_footer(){
@@ -206,9 +206,9 @@ for lvl in $(seq 9); do
     C_TIMES="$C_TIMES | $(echo $A|awk '{printf "%6d", $2}')"
     U_TIMES="$U_TIMES | $(echo $A|awk '{printf "%6d", $3}')"
   fi
-  echo "        | RATIO         $RATIOS"
-  echo "LEV$lvl    | COMP. TIME [s]$C_TIMES"
-  echo "        | DEC.  TIME [s]$U_TIMES"
-  echo "-------------------------------------------------------------"
+  echo "|        |               $RATIOS"
+  echo "|LEV$lvl    | COMP. TIME [s]$C_TIMES"
+  echo "|        | DEC.  TIME [s]$U_TIMES"
+  echo "|------------------------------------------------------------|"
 done
 print_footer
