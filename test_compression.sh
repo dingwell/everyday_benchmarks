@@ -206,7 +206,7 @@ for lvl in $(seq 9); do
     C_TIMES="$C_TIMES | $(echo $A|awk '{printf "%6d", $2}')"
     U_TIMES="$U_TIMES | $(echo $A|awk '{printf "%6d", $3}')"
   fi
-  echo "|        |               $RATIOS"
+  echo "|        | COMP. RATIO   $RATIOS"
   echo "|LEV$lvl    | COMP. TIME [s]$C_TIMES"
   echo "|        | DEC.  TIME [s]$U_TIMES"
   echo "|------------------------------------------------------------|"
