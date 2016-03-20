@@ -147,7 +147,7 @@ test_compression(){
 }
 
 print_header(){
-  local HEADER='        | CMD            '
+  local HEADER='|        |                '
   if $DO_GZIP; then
     HEADER="$HEADER"'|  gzip  '
   fi
