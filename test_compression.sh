@@ -72,8 +72,7 @@ get_suffix(){
 
 get_compr_ratio_gz(){
   # Takes a list of gzip-compressed files as argument:
-  gzip -l $@ |tail -n1|egrep -o '[0-9]+.[0-9]%' \
-    |sed 's/%/\\%/'
+  gzip -l $@ |tail -n1|egrep -o '[0-9]+.[0-9]%'
 }
 
 get_compr_ratio_lzo(){
@@ -81,7 +80,7 @@ get_compr_ratio_lzo(){
   TMP=$(lzop -l $@ |tail -n1|egrep -o '[0-9]+.[0-9]%')
   TMP=$(echo $TMP|sed 's/%//')  # Remove '%'
   local RATIO=$(echo "scale=1; 100-$TMP"|bc)
-  echo "$RATIO"'\%'
+  echo "$RATIO"'%'
 }
 
 get_compr_ratio_bz2(){
@@ -89,7 +88,7 @@ get_compr_ratio_bz2(){
   local COMPR_SIZE=$(cat $@|wc -c)  # Size in bytes
   local ORIG_SIZE=$(bzip2 -dc $@|wc -c)
   local RATIO=$(echo "scale=1;100-100*$COMPR_SIZE/$ORIG_SIZE"|bc)
-  echo "$RATIO"'\%'
+  echo "$RATIO"'%'
 }
 
 get_compr_ratio_xz(){
@@ -97,7 +96,7 @@ get_compr_ratio_xz(){
   local COMPR_SIZE=$(cat $@|wc -c)  # Size in bytes
   local ORIG_SIZE=$(xz -dc $@|wc -c)
   local RATIO=$(echo "scale=1;100-100*$COMPR_SIZE/$ORIG_SIZE"|bc)
-  echo "$RATIO"'\%'
+  echo "$RATIO%"
 }
 
 test_compression(){
@@ -148,28 +147,28 @@ test_compression(){
 }
 
 print_header(){
-  local HEADER='        & CMD        '
+  local HEADER='        | CMD            '
   if $DO_GZIP; then
-    HEADER="$HEADER"'& gzip '
+    HEADER="$HEADER"'|  gzip  '
   fi
   if $DO_LZOP; then
-    HEADER="$HEADER"'& lzop '
+    HEADER="$HEADER"'|  lzop  '
   fi
   if $DO_BZIP; then
-    HEADER="$HEADER"'& bzip2 '
+    HEADER="$HEADER"'|  bzip2 '
   fi
   if $DO_XZ; then
-    HEADER="$HEADER"'& xz '
+    HEADER="$HEADER"'|   xz  '
   fi
   local NWORDS=$(echo $HEADER|wc -w)
   local NCOLS=$(echo "$NWORDS/2-1"|bc)
-  echo '\hline'
-  echo '\begin{tabular}{ll*{'"$NCOLS"'}{c}}'
-  echo '\hline'
+  echo "-------------------------------------------------------------"
+  echo "$HEADER"
+  echo "-------------------------------------------------------------"
 }
 
 print_footer(){
-  echo '\end{tabular}'
+  echo 'FOOTER?'
 }
 
 KB_BEFORE=$(total_size_kB $FILES)  # With unit
@@ -185,34 +184,31 @@ for lvl in $(seq 9); do
   U_TIMES=""
   if $DO_GZIP; then
     A="$(test_compression gzip $lvl)"
-    RATIOS="$RATIOS & $(echo $A|awk '{print $1}')"
-    C_TIMES="$C_TIMES & $(echo $A|awk '{print $2}')"
-    U_TIMES="$U_TIMES & $(echo $A|awk '{print $3}')"
+    RATIOS="$RATIOS |  $(echo $A|awk '{print $1}')"
+    C_TIMES="$C_TIMES | $(echo $A|awk '{printf "%6d", $2}')"
+    U_TIMES="$U_TIMES | $(echo $A|awk '{printf "%6d", $3}')"
   fi
   if $DO_LZOP; then
     A="$(test_compression lzop $lvl)"
-    RATIOS="$RATIOS & $(echo $A|awk '{print $1}')"
-    C_TIMES="$C_TIMES & $(echo $A|awk '{print $2}')"
-    U_TIMES="$U_TIMES & $(echo $A|awk '{print $3}')"
+    RATIOS="$RATIOS |  $(echo $A|awk '{print $1}')"
+    C_TIMES="$C_TIMES | $(echo $A|awk '{printf "%6d", $2}')"
+    U_TIMES="$U_TIMES | $(echo $A|awk '{printf "%6d", $3}')"
   fi
   if $DO_BZIP; then
     A="$(test_compression bzip2 $lvl)"
-    RATIOS="$RATIOS & $(echo $A|awk '{print $1}')"
-    C_TIMES="$C_TIMES & $(echo $A|awk '{print $2}')"
-    U_TIMES="$U_TIMES & $(echo $A|awk '{print $3}')"
+    RATIOS="$RATIOS |  $(echo $A|awk '{print $1}')"
+    C_TIMES="$C_TIMES | $(echo $A|awk '{printf "%6d", $2}')"
+    U_TIMES="$U_TIMES | $(echo $A|awk '{printf "%6d", $3}')"
   fi
   if $DO_XZ; then
     A="$(test_compression xz $lvl)"
-    RATIOS="$RATIOS & $(echo $A|awk '{print $1}')"
-    C_TIMES="$C_TIMES & $(echo $A|awk '{print $2}')"
-    U_TIMES="$U_TIMES & $(echo $A|awk '{print $3}')"
+    RATIOS="$RATIOS |  $(echo $A|awk '{print $1}')"
+    C_TIMES="$C_TIMES | $(echo $A|awk '{printf "%6d", $2}')"
+    U_TIMES="$U_TIMES | $(echo $A|awk '{printf "%6d", $3}')"
   fi
-  RATIOS="$RATIOS"'\\'
-  C_TIMES="$C_TIMES"'\\'
-  U_TIMES="$U_TIMES"'\\'
-  echo "        & RATIO      $RATIOS"
-  echo "LEV$lvl    & COMP. TIME $C_TIMES"
-  echo "        & DEC.  TIME $U_TIMES"
-  echo '\hline'
+  echo "        | RATIO         $RATIOS"
+  echo "LEV$lvl    | COMP. TIME [s]$C_TIMES"
+  echo "        | DEC.  TIME [s]$U_TIMES"
+  echo "-------------------------------------------------------------"
 done
 print_footer
