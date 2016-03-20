@@ -41,7 +41,8 @@ get_suffix(){
 
 get_compr_ratio_gz(){
   # Takes a list of gzip-compressed files as argument:
-  gzip -l $@ |tail -n1|egrep -o '[0-9]+.[0-9]%'
+  gzip -l $@ |tail -n1|egrep -o '[0-9]+.[0-9]%' \
+    |sed 's/%/\\%/'
 }
 
 get_compr_ratio_lzo(){
@@ -49,7 +50,7 @@ get_compr_ratio_lzo(){
   TMP=$(lzop -l $@ |tail -n1|egrep -o '[0-9]+.[0-9]%')
   TMP=$(echo $TMP|sed 's/%//')  # Remove '%'
   local RATIO=$(echo "scale=1; 100-$TMP"|bc)
-  echo "$RATIO%"
+  echo "$RATIO"'\%'
 }
 
 get_compr_ratio_bz2(){
@@ -57,7 +58,7 @@ get_compr_ratio_bz2(){
   local COMPR_SIZE=$(cat $@|wc -c)  # Size in bytes
   local ORIG_SIZE=$(bzip2 -dc $@|wc -c)
   local RATIO=$(echo "scale=1;100-100*$COMPR_SIZE/$ORIG_SIZE"|bc)
-  echo "$RATIO%"
+  echo "$RATIO"'\%'
 }
 
 get_compr_ratio_xz(){
@@ -65,7 +66,7 @@ get_compr_ratio_xz(){
   local COMPR_SIZE=$(cat $@|wc -c)  # Size in bytes
   local ORIG_SIZE=$(xz -dc $@|wc -c)
   local RATIO=$(echo "scale=1;100-100*$COMPR_SIZE/$ORIG_SIZE"|bc)
-  echo "$RATIO%"
+  echo "$RATIO"'\%'
 }
 
 test_compression(){
@@ -132,8 +133,12 @@ print_header(){
   local NWORDS=$(echo $HEADER|wc -w)
   local NCOLS=$(echo "$NWORDS/2-1"|bc)
   echo '\hline'
-  echo '\tabular{ll*{'"$NCOLS"'}{c}}'
+  echo '\begin{tabular}{ll*{'"$NCOLS"'}{c}}'
   echo '\hline'
+}
+
+print_footer(){
+  echo '\end{tabular}'
 }
 
 KB_BEFORE=$(total_size_kB $FILES)  # With unit
@@ -179,3 +184,4 @@ for lvl in $(seq 9); do
   echo "        & DEC.  TIME $U_TIMES"
   echo '\hline'
 done
+print_footer
